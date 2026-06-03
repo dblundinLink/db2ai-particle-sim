@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gravity + Electrostatic N-Body Simulator</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #1a1a1a;
+      color: #e0e0e0;
+    }
+    h1 {
+      margin: 0 0 10px 0;
+      font-size: 24px;
+      color: #4a9eff;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .info {
+      margin-bottom: 15px;
+      padding: 10px;
+      background: #2a2a2a;
+      border-radius: 5px;
+      font-size: 14px;
+    }
+    canvas {
+      display: block;
+      background: #000;
+      border: 2px solid #333;
+      border-radius: 5px;
+      margin: 15px 0;
+    }
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 14px;
+      background: #4a9eff;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background: #357abd;
+    }
+    button:active {
+      background: #2a5a8f;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+    }
+    .stat-box {
+      background: #2a2a2a;
+      padding: 8px;
+      border-radius: 5px;
+      border-left: 3px solid #4a9eff;
+    }
+    .stat-label {
+      color: #888;
+      font-size: 11px;
+      text-transform: uppercase;
+    }
+    .stat-value {
+      color: #e0e0e0;
+      font-size: 16px;
+      font-weight: bold;
+    }
+    .slider-group {
+      background: #2a2a2a;
+      padding: 12px;
+      border-radius: 5px;
+      margin-bottom: 15px;
+    }
+    .slider-row {
+      display: flex;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .slider-row:last-child {
+      margin-bottom: 0;
+    }
+    .slider-label {
+      flex: 0 0 80px;
+      font-size: 13px;
+      color: #888;
+    }
+    .slider-input {
+      flex: 1;
+      margin: 0 10px;
+    }
+    .slider-value {
+      flex: 0 0 80px;
+      text-align: right;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      color: #4a9eff;
+    }
+    input[type="range"] {
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: #444;
+      outline: none;
+      -webkit-appearance: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #4a9eff;
+      cursor: pointer;
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #4a9eff;
+      cursor: pointer;
+      border: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🌌 Gravity + Electrostatic N-Body Simulator</h1>
+
+    <div class="info">
+      <strong>Physics:</strong> Every particle experiences simultaneous gravity (attractive) and
+      Coulomb forces (attractive for opposite charges, repulsive for like charges).
+      Integrated via velocity-Verlet for energy conservation.
+    </div>
+
+    <div class="controls">
+      <button id="btnPlay">▶️ Play</button>
+      <button id="btnPause">⏸️ Pause</button>
+      <button id="btnStep">⏭️ Step</button>
+      <button id="btnReset">🔄 Reset</button>
+    </div>
+
+    <div class="controls">
+      <select id="presetSelect" style="padding: 10px; font-size: 14px; background: #2a2a2a; color: #e0e0e0; border: 1px solid #4a9eff; border-radius: 5px;">
+        <option value="">-- Select Preset Initial Condition --</option>
+      </select>
+      <button id="btnLoadPreset">Load Selected Preset</button>
+    </div>
+
+    <div class="controls">
+      <button id="btnToggleEngine">Engine: Single-threaded</button>
+      <button id="btnRandomize">🎲 Randomize Interesting</button>
+    </div>
+
+    <div class="slider-group">
+      <div class="slider-row">
+        <div class="slider-label">Gravity (G)</div>
+        <div class="slider-input"><input type="range" id="sliderG" min="0" max="5" step="0.1" value="1.0"></div>
+        <div class="slider-value" id="valueG">1.0</div>
+      </div>
+      <div class="slider-row">
+        <div class="slider-label">Coulomb (k_e)</div>
+        <div class="slider-input"><input type="range" id="sliderKe" min="0" max="5" step="0.1" value="1.0"></div>
+        <div class="slider-value" id="valueKe">1.0</div>
+      </div>
+      <div class="slider-row">
+        <div class="slider-label">Softening (ε)</div>
+        <div class="slider-input"><input type="range" id="sliderEpsilon" min="0.001" max="0.1" step="0.001" value="0.01"></div>
+        <div class="slider-value" id="valueEpsilon">0.010</div>
+      </div>
+      <div class="slider-row">
+        <div class="slider-label">Timestep (dt)</div>
+        <div class="slider-input"><input type="range" id="sliderDt" min="0.001" max="0.05" step="0.001" value="0.01"></div>
+        <div class="slider-value" id="valueDt">0.010</div>
+      </div>
+      <div class="slider-row">
+        <div class="slider-label">Speed</div>
+        <div class="slider-input"><input type="range" id="sliderSpeed" min="1" max="10" step="1" value="1"></div>
+        <div class="slider-value" id="valueSpeed">1x</div>
+      </div>
+    </div>
+
+    <canvas id="canvas" width="800" height="600"></canvas>
+
+    <div class="stats">
+      <div class="stat-box">
+        <div class="stat-label">Particles</div>
+        <div class="stat-value" id="statN">0</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Steps</div>
+        <div class="stat-value" id="statSteps">0</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Energy</div>
+        <div class="stat-value" id="statEnergy">0.0000</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">FPS</div>
+        <div class="stat-value" id="statFPS">0</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Engine</div>
+        <div class="stat-value" id="statEngine">Single</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="particle_engine.js"></script>
+  <script src="particle_engine_parallel.js"></script>
+  <script src="particle_engine_webgl.js"></script>
+  <script>
+    // Canvas setup
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width;
+    const height = canvas.height;
+
+    // Engine mode: 'single', 'parallel', or 'webgl'. DEFAULT MUST be the simplest engine that passes
+    // the display test (single-threaded ParticleEngine implements the exact interface the renderer calls:
+    // init(x,v,m,q), .N, .x[i][d], synchronous step(), totalEnergy()). Faster variants are opt-in toggles.
+    let engineMode = 'single';
+    let engine;
+
+    function createEngine(mode) {
+      const config = {
+        G: 1.0,
+        k_e: 1.0,
+        epsilon: 0.01,
+        dt: 0.01,
+        dim: 2
+      };
+
+      if (mode === 'parallel') {
+        return new ParticleEngineParallel(config);
+      } else if (mode === 'webgl') {
+        return new ParticleEngineWebGL(config);
+      } else {
+        return new ParticleEngine(config);
+      }
+    }
+
+    engine = createEngine(engineMode);
+
+    // Initial condition: 2-body gravity orbit (same as Python test)
+    let initialState = {
+      x: [[0, 0], [1, 0]],
+      v: [[0, 0.5], [0, -0.5]],
+      m: [1.0, 1.0],
+      q: [0.0, 0.0]  // no charge for gravity-only orbit
+    };
+
+    // Load IC catalog
+    let icCatalog = null;
+    fetch('ic_catalog.json')
+      .then(response => response.json())
+      .then(data => {
+        icCatalog = data;
+        const select = document.getElementById('presetSelect');
+        data.initial_conditions.forEach((ic, idx) => {
+          const option = document.createElement('option');
+          option.value = idx;
+          option.textContent = ic.description;
+          select.appendChild(option);
+        });
+      })
+      .catch(err => console.error('Failed to load IC catalog:', err));
+
+    // Animation state
+    let running = false;
+    let steps = 0;
+    let initialEnergy = 0;
+    let lastFrameTime = 0;
+    let fps = 0;
+    let simSpeed = 1;  // steps per frame
+
+    // Initialize engine
+    function reset() {
+      engine.init(
+        initialState.x,
+        initialState.v,
+        initialState.m,
+        initialState.q
+      );
+      steps = 0;
+      initialEnergy = engine.totalEnergy();
+      render();
+      updateStats();
+    }
+
+    // Render particles
+    function render() {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, width, height);
+
+      // Find bounds for auto-scaling
+      let minX = Infinity, maxX = -Infinity;
+      let minY = Infinity, maxY = -Infinity;
+      for (let i = 0; i < engine.N; i++) {
+        minX = Math.min(minX, engine.x[i][0]);
+        maxX = Math.max(maxX, engine.x[i][0]);
+        minY = Math.min(minY, engine.x[i][1]);
+        maxY = Math.max(maxY, engine.x[i][1]);
+      }
+      const rangeX = maxX - minX;
+      const rangeY = maxY - minY;
+      const range = Math.max(rangeX, rangeY, 2);
+      const scale = Math.min(width, height) * 0.8 / range;
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+
+      // Draw particles
+      for (let i = 0; i < engine.N; i++) {
+        const screenX = width / 2 + (engine.x[i][0] - centerX) * scale;
+        const screenY = height / 2 - (engine.x[i][1] - centerY) * scale;
+
+        // Color by charge: blue for negative, red for positive, white for neutral
+        let color;
+        if (Math.abs(engine.q[i]) < 1e-6) {
+          color = '#ffffff';  // neutral
+        } else if (engine.q[i] > 0) {
+          color = '#ff4444';  // positive (red)
+        } else {
+          color = '#4444ff';  // negative (blue)
+        }
+
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, 5, 0, 2 * Math.PI);
+        ctx.fill();
+
+        // Draw velocity vector
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1;
+        ctx.globalAlpha = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(screenX, screenY);
+        ctx.lineTo(
+          screenX + engine.v[i][0] * scale * 10,
+          screenY - engine.v[i][1] * scale * 10
+        );
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    // Update stats display
+    function updateStats() {
+      document.getElementById('statN').textContent = engine.N;
+      document.getElementById('statSteps').textContent = steps;
+      const energy = engine.totalEnergy();
+      const energyDrift = initialEnergy !== 0 ?
+        Math.abs((energy - initialEnergy) / initialEnergy * 100) : 0;
+      document.getElementById('statEnergy').textContent =
+        `${energy.toFixed(4)} (drift: ${energyDrift.toFixed(4)}%)`;
+      document.getElementById('statFPS').textContent = Math.round(fps);
+    }
+
+    // Animation loop
+    function animate(timestamp) {
+      if (running) {
+        // Measure FPS
+        if (lastFrameTime > 0) {
+          const dt = (timestamp - lastFrameTime) / 1000;
+          fps = fps * 0.9 + (1 / dt) * 0.1;  // exponential moving average
+        }
+        lastFrameTime = timestamp;
+
+        // Step physics (multiple steps per frame based on simSpeed)
+        for (let i = 0; i < simSpeed; i++) {
+          engine.step();
+          steps++;
+        }
+
+        // Render and update stats
+        render();
+        updateStats();
+
+        requestAnimationFrame(animate);
+      }
+    }
+
+    // Controls
+    document.getElementById('btnPlay').addEventListener('click', () => {
+      if (!running) {
+        running = true;
+        lastFrameTime = 0;
+        requestAnimationFrame(animate);
+      }
+    });
+
+    document.getElementById('btnPause').addEventListener('click', () => {
+      running = false;
+    });
+
+    document.getElementById('btnStep').addEventListener('click', () => {
+      engine.step();
+      steps++;
+      render();
+      updateStats();
+    });
+
+    document.getElementById('btnReset').addEventListener('click', reset);
+
+    document.getElementById('btnLoadPreset').addEventListener('click', () => {
+      const select = document.getElementById('presetSelect');
+      const idx = parseInt(select.value);
+      if (isNaN(idx) || !icCatalog) {
+        alert('Please select a preset from the dropdown.');
+        return;
+      }
+
+      const ic = icCatalog.initial_conditions[idx];
+      const icData = ic.initial_conditions;
+      const physics = ic.physics_constants;
+
+      // Update initialState
+      initialState = {
+        x: icData.positions,
+        v: icData.velocities,
+        m: icData.masses,
+        q: icData.charges
+      };
+
+      // Update engine physics constants and sliders from the catalog
+      engine.G = physics.G;
+      engine.k_e = physics.k_e;
+      engine.epsilon = physics.epsilon;
+      engine.dt = physics.dt;
+
+      document.getElementById('sliderG').value = physics.G;
+      document.getElementById('valueG').textContent = physics.G.toFixed(1);
+      document.getElementById('sliderKe').value = physics.k_e;
+      document.getElementById('valueKe').textContent = physics.k_e.toFixed(1);
+      document.getElementById('sliderEpsilon').value = physics.epsilon;
+      document.getElementById('valueEpsilon').textContent = physics.epsilon.toFixed(3);
+      document.getElementById('sliderDt').value = physics.dt;
+      document.getElementById('valueDt').textContent = physics.dt.toFixed(3);
+
+      reset();
+    });
+
+    document.getElementById('btnToggleEngine').addEventListener('click', () => {
+      // Stop if running
+      const wasRunning = running;
+      running = false;
+
+      // Save current state
+      const currentState = {
+        x: engine.x.map(row => [...row]),
+        v: engine.v.map(row => [...row]),
+        m: [...engine.m],
+        q: [...engine.q],
+        G: engine.G,
+        k_e: engine.k_e,
+        epsilon: engine.epsilon,
+        dt: engine.dt
+      };
+
+      // Cycle through engines: parallel -> single -> webgl -> parallel
+      if (engineMode === 'parallel') {
+        engineMode = 'single';
+      } else if (engineMode === 'single') {
+        engineMode = 'webgl';
+      } else {
+        engineMode = 'parallel';
+      }
+
+      // Create new engine
+      engine = createEngine(engineMode);
+      engine.G = currentState.G;
+      engine.k_e = currentState.k_e;
+      engine.epsilon = currentState.epsilon;
+      engine.dt = currentState.dt;
+
+      // Restore state
+      engine.init(currentState.x, currentState.v, currentState.m, currentState.q);
+
+      // Update UI
+      const btn = document.getElementById('btnToggleEngine');
+      const engineNames = {
+        'parallel': 'Parallel (Web Workers)',
+        'single': 'Single-threaded',
+        'webgl': 'WebGL (GPU)'
+      };
+      btn.textContent = `Engine: ${engineNames[engineMode]}`;
+      document.getElementById('statEngine').textContent = engineNames[engineMode].split(' ')[0];
+
+      render();
+      updateStats();
+
+      // Resume if it was running
+      if (wasRunning) {
+        running = true;
+        lastFrameTime = 0;
+        requestAnimationFrame(animate);
+      }
+    });
+
+    document.getElementById('btnRandomize').addEventListener('click', () => {
+      if (!icCatalog) {
+        alert('IC catalog not loaded yet. Please wait and try again.');
+        return;
+      }
+      // Pick a random IC from the catalog
+      const idx = Math.floor(Math.random() * icCatalog.initial_conditions.length);
+      const ic = icCatalog.initial_conditions[idx];
+      const icData = ic.initial_conditions;
+      const physics = ic.physics_constants;
+
+      // Update initialState
+      initialState = {
+        x: icData.positions,
+        v: icData.velocities,
+        m: icData.masses,
+        q: icData.charges
+      };
+
+      // Update engine physics constants and sliders
+      engine.G = physics.G;
+      engine.k_e = physics.k_e;
+      engine.epsilon = physics.epsilon;
+      engine.dt = physics.dt;
+
+      document.getElementById('sliderG').value = physics.G;
+      document.getElementById('valueG').textContent = physics.G.toFixed(1);
+      document.getElementById('sliderKe').value = physics.k_e;
+      document.getElementById('valueKe').textContent = physics.k_e.toFixed(1);
+      document.getElementById('sliderEpsilon').value = physics.epsilon;
+      document.getElementById('valueEpsilon').textContent = physics.epsilon.toFixed(3);
+      document.getElementById('sliderDt').value = physics.dt;
+      document.getElementById('valueDt').textContent = physics.dt.toFixed(3);
+
+      reset();
+    });
+
+    // Wire sliders to engine parameters
+    document.getElementById('sliderG').addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      engine.G = val;
+      document.getElementById('valueG').textContent = val.toFixed(1);
+    });
+
+    document.getElementById('sliderKe').addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      engine.k_e = val;
+      document.getElementById('valueKe').textContent = val.toFixed(1);
+    });
+
+    document.getElementById('sliderEpsilon').addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      engine.epsilon = val;
+      document.getElementById('valueEpsilon').textContent = val.toFixed(3);
+    });
+
+    document.getElementById('sliderDt').addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      engine.dt = val;
+      document.getElementById('valueDt').textContent = val.toFixed(3);
+    });
+
+    document.getElementById('sliderSpeed').addEventListener('input', (e) => {
+      const val = parseInt(e.target.value);
+      simSpeed = val;
+      document.getElementById('valueSpeed').textContent = `${val}x`;
+    });
+
+    // Initialize on load
+    reset();
+  </script>
+</body>
+</html>
